@@ -38,8 +38,8 @@ function materializeBlock(blockParams, uncles){
     tx.hash = function(){ return ethUtil.toBuffer(txParams.hash) }
     return tx
   })
-  block.uncleHeaders = (uncles || []).map(function(uncle){
-    return materializeBlock(uncle)
+  block.uncleHeaders = (uncles || []).map(function(uncleParams){
+    return materializeBlock(uncleParams).header
   })
 
   return block

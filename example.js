@@ -34,55 +34,55 @@ var blockchain = new RpcBlockchain(provider, iteratorDb)
 
 var vm = new VM(stateTrie, blockchain)
 
-vm.stateManager.generateCanonicalGenesis(function(err){
-  if (err) throw err
-  vm.stateManager.getAccountBalance(new Buffer('a1e4380a3b1f749673e270229993ee55f35663b4','hex'), function(){
-    console.log(arguments)
-  })
+// vm.stateManager.generateCanonicalGenesis(function(err){
+//   if (err) throw err
+//   vm.stateManager.getAccountBalance(new Buffer('a1e4380a3b1f749673e270229993ee55f35663b4','hex'), function(){
+//     console.log(arguments)
+//   })
+// })
+
+
+
+
+var lastBlock
+var blockNumber
+var blockHash
+
+vm.on('step', function (info) {
+  console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
 })
 
+vm.on('beforeTx', function (tx) {
+  console.log('tx.to:', ethUtil.bufferToHex(tx.to))
+  console.log('tx.from:', ethUtil.bufferToHex(tx.getSenderAddress()))
+  console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
+})
 
+vm.on('beforeBlock', function (block) {
+  lastBlock = block
+  blockNumber = ethUtil.bufferToHex(block.header.number)
+  blockHash = ethUtil.bufferToHex(block.hash())
+})
 
+vm.on('afterBlock', function (results) {
+  // if (results.error) console.log(results.error)
+  var ourStateRoot = ethUtil.bufferToHex(vm.stateManager.trie.root)
+  var stateRootMatches = (ourStateRoot === ethUtil.bufferToHex(lastBlock.header.stateRoot))
+  var out = `#${blockNumber} ${blockHash} txs: ${results.receipts.length} root: ${ourStateRoot}`
+  console.log(out)
+  if (!stateRootMatches) {
+    throw new Error('Stateroots don\'t match.')
+    process.exit()
+  }
+})
 
-// var lastBlock
-// var blockNumber
-// var blockHash
-
-// vm.on('step', function (info) {
-//   console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
+// console.log('generateGenesis - before')
+// vm.generateCanonicalGenesis(function(){
+//   console.log('generateGenesis - after')
+console.log('runBlockchain - before')
+vm.runBlockchain(function () {
+  console.log('runBlockchain - after')
+})
 // })
 
-// vm.on('beforeTx', function (tx) {
-//   console.log('tx.to:', ethUtil.bufferToHex(tx.to))
-//   console.log('tx.from:', ethUtil.bufferToHex(tx.getSenderAddress()))
-//   console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
-// })
-
-// vm.on('beforeBlock', function (block) {
-//   lastBlock = block
-//   blockNumber = ethUtil.bufferToHex(block.header.number)
-//   blockHash = ethUtil.bufferToHex(block.hash())
-// })
-
-// vm.on('afterBlock', function (results) {
-//   // if (results.error) console.log(results.error)
-//   var ourStateRoot = ethUtil.bufferToHex(vm.stateManager.trie.root)
-//   var stateRootMatches = (ourStateRoot === ethUtil.bufferToHex(lastBlock.header.stateRoot))
-//   var out = `#${blockNumber} ${blockHash} txs: ${results.receipts.length} root: ${ourStateRoot}`
-//   console.log(out)
-//   if (!stateRootMatches) {
-//     throw new Error('Stateroots don\'t match.')
-//     process.exit()
-//   }
-// })
-
-// // console.log('generateGenesis - before')
-// // vm.generateCanonicalGenesis(function(){
-// //   console.log('generateGenesis - after')
-// console.log('runBlockchain - before')
-// vm.runBlockchain(function () {
-//   console.log('runBlockchain - after')
-// })
-// // })
-
-// // 010b25
+// 010b25

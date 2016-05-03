@@ -56,24 +56,38 @@ RpcBlockchain.prototype._followBlockchain = function(iteratorHead, onBlock, onDo
     
     self._getBlockByNumber(iteratorHead.blockNumber, function(err, block){
       if (err) return cb(err)
+  
       // already at head
       if (!block) return setTimeout(function(){
         console.log('waiting for next block...')
         cb()
       }, 1000)
+  
       // process new block
-      var reorg = headBlock ? headBlock.hash().toString('hex') !== block.header.parentHash.toString('hex') : false
-      onBlock(block, reorg, function(err){
-        if (err) return cb(err)
+      if (iteratorHead.blockNumber === 0) {
+        // dont report genesis block
+        advanceIterator()
+      } else {
+        reportBlock()
+      }
+
+      function reportBlock(){
+        var reorg = headBlock ? headBlock.hash().toString('hex') !== block.header.parentHash.toString('hex') : false
+        onBlock(block, reorg, function(err){
+          if (err) return cb(err)
+          advanceIterator()
+        })
+      }
+
+      function advanceIterator(){
         headBlock = block
-        // update and save iterator
         iteratorHead.blockNumber++
         self._putIteratorData(iteratorHead.name, iteratorHead, function(err){
           if (err) return cb(err)
-          // dont report genesis block
-          if (iteratorHead.blockNumber === 0) return cb()
+          cb()
         })
-      })
+      }
+
     })
 
   }, onDone)
