@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "async": "^2.0.0-rc.3",
-    "eth-store": "^2.0.0",
+    "eth-store": "^2.1.0",
     "ethereumjs-block": "^1.2.2",
     "ethereumjs-blockchain": "^1.4.1",
     "ethereumjs-util": "^4.4.0",
