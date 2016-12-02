@@ -19,7 +19,7 @@ function materializeBlock(blockParams, uncles){
   blockHeader.bloom = blockParams.logsBloom
   blockHeader.transactionsTrie = blockParams.transactionsRoot
   blockHeader.stateRoot = blockParams.stateRoot
-  blockHeader.receiptTrie = blockParams.receiptRoot || ethUtil.SHA3_NULL
+  blockHeader.receiptTrie = blockParams.receiptRoot || blockParams.receiptsRoot || ethUtil.SHA3_NULL
   blockHeader.coinbase = blockParams.miner
   blockHeader.difficulty = blockParams.difficulty
   blockHeader.extraData = blockParams.extraData
@@ -31,9 +31,10 @@ function materializeBlock(blockParams, uncles){
   }
 
   block.transactions = (blockParams.transactions || []).map(function(txParams){
+    normalizeTxParams(txParams)
     var tx = new Transaction(txParams)
     // override from address
-    tx._from = txParams.from
+    tx._from = ethUtil.toBuffer(txParams.from)
     // override hash
     tx.hash = function(){ return ethUtil.toBuffer(txParams.hash) }
     return tx
@@ -43,4 +44,12 @@ function materializeBlock(blockParams, uncles){
   })
 
   return block
+}
+
+function normalizeTxParams(txParams){
+  // hot fix for https://github.com/ethereumjs/ethereumjs-util/issues/40
+  txParams.gasLimit = (txParams.gasLimit === undefined)? txParams.gas : txParams.gasLimit
+  txParams.data = (txParams.data === undefined)? txParams.input : txParams.data
+  // strict byte length checking
+  txParams.to = ethUtil.setLengthLeft(ethUtil.toBuffer(txParams.to), 20)
 }

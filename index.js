@@ -6,7 +6,7 @@ const Blockchain = require('ethereumjs-blockchain')
 const Block = require('ethereumjs-block')
 const BlockHeader = require('ethereumjs-block/header')
 const ethUtil = require('ethereumjs-util')
-const rpcToBlock = require('eth-tx-summary/materialize-blocks.js')
+const rpcToBlock = require('./materialize-block.js')
 
 
 const RPC_ENDPOINT = 'https://mainnet.infura.io/'
@@ -18,19 +18,14 @@ var blockchain = new Blockchain(blockchainDb, false)
 var vm = new VM({ blockchain: blockchain })
 
 
-vm.on('step', function (info) {
-  console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
-})
-
-vm.on('beforeTx', function (tx) {
-  console.log('tx.to:', ethUtil.bufferToHex(tx.to))
-  console.log('tx.from:', ethUtil.bufferToHex(tx.getSenderAddress()))
-  console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
-})
+let lastBlock = null
+let blockNumber = null
+let blockHash = null
+let blockSyncNumber = 0
 
 vm.on('beforeBlock', function (block) {
   lastBlock = block
-  blockNumber = ethUtil.bufferToHex(block.header.number)
+  blockNumber = ethUtil.bufferToInt(block.header.number)
   blockHash = ethUtil.bufferToHex(block.hash())
 })
 
@@ -38,7 +33,9 @@ vm.on('afterBlock', function (results) {
   // if (results.error) console.log(results.error)
   var ourStateRoot = ethUtil.bufferToHex(vm.stateManager.trie.root)
   var stateRootMatches = (ourStateRoot === ethUtil.bufferToHex(lastBlock.header.stateRoot))
-  var out = `#${blockNumber} ${blockHash} txs: ${results.receipts.length} root: ${ourStateRoot}`
+  // var out = `#${blockNumber} ${blockHash} txs: ${results.receipts.length} root: ${ourStateRoot}`
+  var paddedBlockNumber = ('          ' + blockNumber).slice(-8)
+  var out = `#${paddedBlockNumber} ${blockHash} txs: ${results.receipts.length}`
   console.log(out)
   if (!stateRootMatches) {
     throw new Error('Stateroots don\'t match.')
@@ -46,50 +43,44 @@ vm.on('afterBlock', function (results) {
   }
 })
 
-
-// setTimeout(function(){
-//   vm.runBlockchain(function(){
-//     console.log('done running blockchain', arguments)
-//   })
-// }, 2e4)
-
-
-setGenesis(function(err){
-  if (err) throw err
-  syncWithBlockchain()
+vm.on('beforeTx', function (tx) {
+  console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
 })
 
-var blockSyncNumber = 0
-function syncWithBlockchain(){
+// vm.on('step', function (info) {
+//   console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
+// })
+
+async.series([
+  setGenesis,
+  runBlockchain,
+], function(err){ if (err) throw err })
+
+function runBlockchain(cb){
+  console.log('running blockchain...')
   async.forever(function(cb){
-    // blockchain.getHead(function(err, block){
-    //   if (err) return cb(err)
-      // var blockNumber = ethUtil.bufferToInt(block.header.number)
-      console.log(`at block #${blockSyncNumber}, getting next`)
-      materializeBlock(blockSyncNumber+1, function(err, block){
-        if (err) return cb(err)
-        // console.log(`got block:\n`, describeBlock(block))
-        blockSyncNumber++
-        addBlockToChain(block, cb)
-      })
-    // })
-  }, function(err) { throw err })
+    // var blockNumber = ethUtil.bufferToInt(block.header.number)
+    // console.log(`at block #${blockSyncNumber}, getting next`)
+    materializeBlock(blockSyncNumber+1, function(err, block){
+      if (err) return cb(err)
+      // console.log(`got block:\n`, describeBlock(block))
+      blockSyncNumber++
+      addBlockToChain(block, cb)
+    })
+  }, cb)
 }
-
-
-
 
 function setGenesis(cb){
   materializeBlock(0, function(err, genesis){
     if (err) return cb(err)
-    console.log(`got genesis:\n`, describeBlock(genesis))
+    console.log(`recorded genesis.`)
+    // console.log(`got genesis:\n`, describeBlock(genesis))
     async.series([
       (cb) => blockchain.putGenesis(genesis, cb),
       (cb) => vm.stateManager.generateCanonicalGenesis(cb),
     ], cb)
   })
 }
-
 
 function addBlockToChain(block, cb){
   var isGenesis = (ethUtil.bufferToInt(block.header.number) === 0)
@@ -174,7 +165,7 @@ function runBlock (block, cb) {
   blockchain.getBlock(block.header.parentHash, function (err, parentBlock) {
     if (err) return cb(err)
     let parentState = parentBlock.header.stateRoot
-    console.log('start-root', vm.stateManager.trie.root.toString('hex'))
+    // console.log('start-root', vm.stateManager.trie.root.toString('hex'))
     vm.runBlock({
       block: block,
       root: parentState
@@ -183,7 +174,7 @@ function runBlock (block, cb) {
         console.log('ERROR - runBlock:', err)
         return cb(err)
       }
-      console.log('runBlock. looking good:', results)
+      // console.log('vm results:', results)
       cb()
     })
   })
