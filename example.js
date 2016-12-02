@@ -32,7 +32,10 @@ var blockchain = new RpcBlockchain(provider, iteratorDb)
 
 
 
-var vm = new VM(stateTrie, blockchain)
+var vm = new VM({
+  stateTrie: stateTrie,
+  blockchain: blockchain,
+})
 
 // vm.stateManager.generateCanonicalGenesis(function(err){
 //   if (err) throw err

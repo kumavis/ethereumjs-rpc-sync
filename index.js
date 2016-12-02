@@ -1,16 +1,57 @@
 // const leveldb = require('level')
-// const VM = require('ethereumjs-vm')
+const VM = require('ethereumjs-vm')
+const request = require('request')
+const async = require('async')
 const Blockchain = require('ethereumjs-blockchain')
 const Block = require('ethereumjs-block')
 const BlockHeader = require('ethereumjs-block/header')
-const request = require('request')
-const async = require('async')
+const ethUtil = require('ethereumjs-util')
+const rpcToBlock = require('eth-tx-summary/materialize-blocks.js')
 
+
+const RPC_ENDPOINT = 'https://mainnet.infura.io/'
 
 // var blockchainDb = leveldb('./blockchaindb')
 var blockchainDb = null
 
 var blockchain = new Blockchain(blockchainDb, false)
+var vm = new VM({ blockchain: blockchain })
+
+
+vm.on('step', function (info) {
+  console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
+})
+
+vm.on('beforeTx', function (tx) {
+  console.log('tx.to:', ethUtil.bufferToHex(tx.to))
+  console.log('tx.from:', ethUtil.bufferToHex(tx.getSenderAddress()))
+  console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
+})
+
+vm.on('beforeBlock', function (block) {
+  lastBlock = block
+  blockNumber = ethUtil.bufferToHex(block.header.number)
+  blockHash = ethUtil.bufferToHex(block.hash())
+})
+
+vm.on('afterBlock', function (results) {
+  // if (results.error) console.log(results.error)
+  var ourStateRoot = ethUtil.bufferToHex(vm.stateManager.trie.root)
+  var stateRootMatches = (ourStateRoot === ethUtil.bufferToHex(lastBlock.header.stateRoot))
+  var out = `#${blockNumber} ${blockHash} txs: ${results.receipts.length} root: ${ourStateRoot}`
+  console.log(out)
+  if (!stateRootMatches) {
+    throw new Error('Stateroots don\'t match.')
+    process.exit()
+  }
+})
+
+
+// setTimeout(function(){
+//   vm.runBlockchain(function(){
+//     console.log('done running blockchain', arguments)
+//   })
+// }, 2e4)
 
 
 setGenesis(function(err){
@@ -18,21 +59,21 @@ setGenesis(function(err){
   syncWithBlockchain()
 })
 
+var blockSyncNumber = 0
 function syncWithBlockchain(){
   async.forever(function(cb){
-    var currentNumber = blockchain.getHead(function(err, block){
-      if (err) return cb(err)
-      var blockNumber = ethUtil.bufferToInt(block.header.number)
-      console.log(`at block #${blockNumber}, getting next`)
-      materializeBlock(blockNumber+1, function(err, block){
+    // blockchain.getHead(function(err, block){
+    //   if (err) return cb(err)
+      // var blockNumber = ethUtil.bufferToInt(block.header.number)
+      console.log(`at block #${blockSyncNumber}, getting next`)
+      materializeBlock(blockSyncNumber+1, function(err, block){
         if (err) return cb(err)
-        console.log(`got block:\n`, describeBlock(block))
+        // console.log(`got block:\n`, describeBlock(block))
+        blockSyncNumber++
         addBlockToChain(block, cb)
       })
-    })
-  }, function(err) {
-    throw err
-  })
+    // })
+  }, function(err) { throw err })
 }
 
 
@@ -42,73 +83,110 @@ function setGenesis(cb){
   materializeBlock(0, function(err, genesis){
     if (err) return cb(err)
     console.log(`got genesis:\n`, describeBlock(genesis))
-    blockchain.putGenesis(genesis, cb)
+    async.series([
+      (cb) => blockchain.putGenesis(genesis, cb),
+      (cb) => vm.stateManager.generateCanonicalGenesis(cb),
+    ], cb)
   })
 }
 
 
 function addBlockToChain(block, cb){
   var isGenesis = (ethUtil.bufferToInt(block.header.number) === 0)
-  blockchain.putBlock(block, function(err){
-    if (err) return cb(err)
-    console.log('done putting block', arguments)
-    cb()
-  }, isGenesis)
+  async.series([
+    (cb) => blockchain.putBlock(block, cb, isGenesis),
+    (cb) => runBlock(block, cb),
+  ], cb)
 }
 
 function getBlockByNumber(num, cb){
+  performRpcRequest({
+    id: 1,
+    jsonrpc: '2.0',
+    method: 'eth_getBlockByNumber',
+    params: [ethUtil.intToHex(num), true],
+  }, function(err, res){
+    if (err) return cb(err)
+    cb(null, res.result)
+  })
+}
+
+function getUncleByBlockHashAndIndex(hash, index, cb){
+  performRpcRequest({
+    id: 1,
+    jsonrpc: '2.0',
+    method: 'eth_getUncleByBlockHashAndIndex',
+    params: [hash, ethUtil.intToHex(index)],
+  }, function(err, res){
+    if (err) return cb(err)
+    cb(null, res.result)
+  })
+}
+
+function performRpcRequest(payload, cb){
   request({
-    uri: 'https://rpc.metamask.io/',
-    json: { method: 'eth_getBlockByNumber', params: [num, true] },
+    uri: RPC_ENDPOINT,
+    method: 'POST',
+    json: payload,
   }, function(err, res, body){
     if (err) return cb(err)
-    if (body.error) return cb(body.error.message)
-    var blockParams = body.result
-    cb(null, blockParams)
+    if (body && body.error) return cb(body.error.message)
+    cb(null, body)
   })
 }
 
 function materializeBlock(num, cb){
   getBlockByNumber(num, function(err, blockParams){
     if (err) return cb(err)
-    // getUnclesForBlockByHash(blockParams.hash, function(err, uncles){
-
-    // })
-
-    var block = rpcToBlock(blockParams)
-
-    // console.log('blockParams:', blockParams)
-    // console.log('blockParams Hash:', blockParams.hash.toString('hex'))
-    // console.log('block Hash:      ', ethUtil.bufferToHex(block.hash()))
-    cb(null, block)
+    async.map(blockParams.uncles, function lookupUncle(uncleHash, cb){
+      var uncleIndex = blockParams.uncles.indexOf(uncleHash)
+      getUncleByBlockHashAndIndex(blockParams.hash, uncleIndex, cb)
+    }, function(err, uncles){
+      if (err) return cb(err)
+      var block = rpcToBlock(blockParams, uncles)
+      cb(null, block)
+    })
   })
 }
 
-function rpcToBlock(blockParams){
-  // if (blockParams.sha3Uncles !== '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347') throw new Error('Missing ommers....')
-  var block = new Block({
-    transactions: blockParams.transactions,
-    uncleHeaders: [],
-  })
-  var blockHeader = block.header
-  blockHeader.number = blockParams.number
-  blockHeader.parentHash = blockParams.parentHash
-  blockHeader.nonce = blockParams.nonce
-  blockHeader.uncleHash = blockParams.sha3Uncles
-  blockHeader.bloom = blockParams.logsBloom
-  blockHeader.transactionsTrie = blockParams.transactionsRoot
-  blockHeader.stateRoot = blockParams.stateRoot
-  blockHeader.receiptTrie = blockParams.receiptRoot
-  blockHeader.coinbase = blockParams.miner
-  blockHeader.difficulty = blockParams.difficulty
-  blockHeader.extraData = blockParams.extraData
-  blockHeader.gasLimit = blockParams.gasLimit
-  blockHeader.gasUsed = blockParams.gasUsed
-  blockHeader.timestamp = blockParams.timestamp
-  blockHeader.hash = function () {
-    return ethUtil.toBuffer(blockParams.hash)
+// determine starting state for block run
+function getStartingState (cb) {
+  // if we are just starting or if a chain re-org has happened
+  if (!headBlock || reorg) {
+    self.stateManager.blockchain.getBlock(block.header.parentHash, function (err, parentBlock) {
+      parentState = parentBlock.header.stateRoot
+      // generate genesis state if we are at the genesis block
+      // we don't have the genesis state
+      if (!headBlock) {
+        return self.stateManager.generateCanonicalGenesis(cb)
+      } else {
+        cb(err)
+      }
+    })
+  } else {
+    parentState = headBlock.header.stateRoot
+    cb()
   }
-  return block
+}
+
+// run block, update head if valid
+function runBlock (block, cb) {
+  blockchain.getBlock(block.header.parentHash, function (err, parentBlock) {
+    if (err) return cb(err)
+    let parentState = parentBlock.header.stateRoot
+    console.log('start-root', vm.stateManager.trie.root.toString('hex'))
+    vm.runBlock({
+      block: block,
+      root: parentState
+    }, function (err, results) {
+      if (err) {
+        console.log('ERROR - runBlock:', err)
+        return cb(err)
+      }
+      console.log('runBlock. looking good:', results)
+      cb()
+    })
+  })
 }
 
 
