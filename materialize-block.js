@@ -30,11 +30,17 @@ function materializeBlock(blockParams, uncles){
     return ethUtil.toBuffer(blockParams.hash)
   }
 
-  block.transactions = (blockParams.transactions || []).map(function(txParams){
+  block.transactions = (blockParams.transactions || []).map(function(_txParams){
+    var txParams = Object.assign({}, _txParams)
     normalizeTxParams(txParams)
-    var tx = new Transaction(txParams)
     // override from address
-    tx._from = ethUtil.toBuffer(txParams.from)
+    var fromAddress = ethUtil.toBuffer(txParams.from)
+    delete txParams.from
+    delete txParams.r
+    delete txParams.s
+    delete txParams.v
+    var tx = new Transaction(txParams)
+    tx.getSenderAddress = function(){ return fromAddress }
     // override hash
     tx.hash = function(){ return ethUtil.toBuffer(txParams.hash) }
     return tx

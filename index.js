@@ -9,7 +9,8 @@ const ethUtil = require('ethereumjs-util')
 const rpcToBlock = require('./materialize-block.js')
 
 
-const RPC_ENDPOINT = 'https://mainnet.infura.io/'
+// const RPC_ENDPOINT = 'https://mainnet.infura.io/'
+const RPC_ENDPOINT = 'http://localhost:8545/'
 
 // var blockchainDb = leveldb('./blockchaindb')
 var blockchainDb = null
