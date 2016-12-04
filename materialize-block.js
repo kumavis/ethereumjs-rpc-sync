@@ -36,6 +36,8 @@ function materializeBlock(blockParams, uncles){
     // override from address
     var fromAddress = ethUtil.toBuffer(txParams.from)
     delete txParams.from
+    // issue is that v is provided as a decimal,
+    // complains about byte length
     delete txParams.r
     delete txParams.s
     delete txParams.v

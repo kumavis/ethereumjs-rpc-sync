@@ -1,28 +1,47 @@
-// const leveldb = require('level')
+const leveldb = require('level')
 const VM = require('ethereumjs-vm')
 const request = require('request')
 const async = require('async')
 const Blockchain = require('ethereumjs-blockchain')
-const Block = require('ethereumjs-block')
-const BlockHeader = require('ethereumjs-block/header')
 const ethUtil = require('ethereumjs-util')
+const Trie = require('merkle-patricia-tree/secure.js')
 const rpcToBlock = require('./materialize-block.js')
-
 
 // const RPC_ENDPOINT = 'https://mainnet.infura.io/'
 const RPC_ENDPOINT = 'http://localhost:8545/'
 
-// var blockchainDb = leveldb('./blockchaindb')
-var blockchainDb = null
+var stateDb = leveldb('./stateDb')
+var blockchainDb = leveldb('./blockchainDb')
+// var blockchainDb = null
 
+var stateTrie = new Trie(stateDb)
 var blockchain = new Blockchain(blockchainDb, false)
-var vm = new VM({ blockchain: blockchain })
+var vm = new VM({
+  blockchain: blockchain,
+  state: stateTrie,
+})
 
 
 let lastBlock = null
 let blockNumber = null
 let blockHash = null
 let blockSyncNumber = 0
+
+// lookup head from blockchain db
+// TODO: dont do this, we should track our own head
+// based on blocks that have validated their state root
+blockchain.getHead(function(err, headBlock){
+  // no head
+  if (err) {
+    console.log('no head found....')
+    return startBlockchainSync()
+  }
+  blockSyncNumber = ethUtil.bufferToInt(headBlock.header.number)
+  console.log('head found....', blockSyncNumber)
+  startBlockchainSync()
+})
+
+// startBlockchainSync()
 
 vm.on('beforeBlock', function (block) {
   lastBlock = block
@@ -51,11 +70,12 @@ vm.on('beforeTx', function (tx) {
 // vm.on('step', function (info) {
 //   console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
 // })
-
-async.series([
-  setGenesis,
-  runBlockchain,
-], function(err){ if (err) throw err })
+function startBlockchainSync(){
+  async.series([
+    setGenesis,
+    runBlockchain,
+  ], function(err){ if (err) throw err })
+}
 
 function runBlockchain(cb){
   console.log('running blockchain...')
@@ -74,10 +94,10 @@ function runBlockchain(cb){
 function setGenesis(cb){
   materializeBlock(0, function(err, genesis){
     if (err) return cb(err)
-    console.log(`recorded genesis.`)
+    console.log(`preparing genesis...`)
     // console.log(`got genesis:\n`, describeBlock(genesis))
     async.series([
-      (cb) => blockchain.putGenesis(genesis, cb),
+      // (cb) => blockchain.putGenesis(genesis, cb),
       (cb) => vm.stateManager.generateCanonicalGenesis(cb),
     ], cb)
   })
