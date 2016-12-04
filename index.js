@@ -12,7 +12,8 @@ const RPC_ENDPOINT = 'http://localhost:8545/'
 
 var stateDb = leveldb('./stateDb')
 var blockchainDb = leveldb('./blockchainDb')
-// var blockchainDb = null
+var iteratorDb = leveldb('./iteratorDb')
+
 
 var stateTrie = new Trie(stateDb)
 var blockchain = new Blockchain(blockchainDb, false)
@@ -27,21 +28,15 @@ let blockNumber = null
 let blockHash = null
 let blockSyncNumber = 0
 
-// lookup head from blockchain db
-// TODO: dont do this, we should track our own head
+// we track our own head
 // based on blocks that have validated their state root
-blockchain.getHead(function(err, headBlock){
-  // no head
-  if (err) {
-    console.log('no head found....')
-    return startBlockchainSync()
-  }
-  blockSyncNumber = ethUtil.bufferToInt(headBlock.header.number)
-  console.log('head found....', blockSyncNumber)
+getHeadNumber(function(err, blockNumber){
+  if (err) throw err
+  blockSyncNumber = parseInt(process.argv[2] || blockNumber)
+  console.log('syncing from', blockSyncNumber, typeof blockSyncNumber)
   startBlockchainSync()
 })
 
-// startBlockchainSync()
 
 vm.on('beforeBlock', function (block) {
   lastBlock = block
@@ -70,6 +65,14 @@ vm.on('beforeTx', function (tx) {
 // vm.on('step', function (info) {
 //   console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
 // })
+
+function getHeadNumber(cb){
+  iteratorDb.get('head', function(err, result){
+    if (err) return cb(null, 0)
+    cb(null, result)
+  })
+}
+
 function startBlockchainSync(){
   async.series([
     setGenesis,
@@ -82,17 +85,16 @@ function runBlockchain(cb){
   async.forever(function(cb){
     // var blockNumber = ethUtil.bufferToInt(block.header.number)
     // console.log(`at block #${blockSyncNumber}, getting next`)
-    materializeBlock(blockSyncNumber+1, function(err, block){
+    downloadBlock(blockSyncNumber+1, function(err, block){
       if (err) return cb(err)
       // console.log(`got block:\n`, describeBlock(block))
-      blockSyncNumber++
       addBlockToChain(block, cb)
     })
   }, cb)
 }
 
 function setGenesis(cb){
-  materializeBlock(0, function(err, genesis){
+  downloadBlock(0, function(err, genesis){
     if (err) return cb(err)
     console.log(`preparing genesis...`)
     // console.log(`got genesis:\n`, describeBlock(genesis))
@@ -104,11 +106,21 @@ function setGenesis(cb){
 }
 
 function addBlockToChain(block, cb){
-  var isGenesis = (ethUtil.bufferToInt(block.header.number) === 0)
+  var blockNumber = ethUtil.bufferToInt(block.header.number)
+  var isGenesis = (blockNumber === 0)
   async.series([
     (cb) => blockchain.putBlock(block, cb, isGenesis),
     (cb) => runBlock(block, cb),
+    (cb) => setHeadBlockNumber(blockNumber, cb),
   ], cb)
+}
+
+function setHeadBlockNumber(blockNumber, cb){
+  iteratorDb.put('head', blockNumber, function(err){
+    if (err) return cb(err)
+    blockSyncNumber++
+    cb()
+  })
 }
 
 function getBlockByNumber(num, cb){
@@ -143,11 +155,12 @@ function performRpcRequest(payload, cb){
   }, function(err, res, body){
     if (err) return cb(err)
     if (body && body.error) return cb(body.error.message)
+    // console.log(payload,'->',body)
     cb(null, body)
   })
 }
 
-function materializeBlock(num, cb){
+function downloadBlock(num, cb){
   getBlockByNumber(num, function(err, blockParams){
     if (err) return cb(err)
     async.map(blockParams.uncles, function lookupUncle(uncleHash, cb){
