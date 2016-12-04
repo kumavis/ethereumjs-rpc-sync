@@ -1,7 +1,7 @@
 ### App ###
 
-iteratordb/
-statedb/
+stateDb/
+blockchainDb/
 
 
 # Created by https://www.gitignore.io/api/osx,node
