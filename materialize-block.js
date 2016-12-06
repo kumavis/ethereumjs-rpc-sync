@@ -59,5 +59,5 @@ function normalizeTxParams(txParams){
   txParams.gasLimit = (txParams.gasLimit === undefined)? txParams.gas : txParams.gasLimit
   txParams.data = (txParams.data === undefined)? txParams.input : txParams.data
   // strict byte length checking
-  txParams.to = ethUtil.setLengthLeft(ethUtil.toBuffer(txParams.to), 20)
+  txParams.to = txParams.to ? ethUtil.setLengthLeft(ethUtil.toBuffer(txParams.to), 20) : null
 }
