@@ -60,11 +60,18 @@ vm.on('afterBlock', function (results) {
 
 vm.on('beforeTx', function (tx) {
   console.log('tx.hash:', ethUtil.bufferToHex(tx.hash()))
+  console.log('tx.to:', ethUtil.bufferToHex(tx.to))
+  console.log('tx.from:', ethUtil.bufferToHex(tx.from))
+  console.log('tx.value:', ethUtil.bufferToHex(tx.value))
+  console.log('tx.data:', ethUtil.bufferToHex(tx.data))
+  console.log('tx.gasLimit:', ethUtil.bufferToHex(tx.gasLimit))
 })
 
-// vm.on('step', function (info) {
-//   console.log(info.opcode.opcode, ethUtil.bufferToHex(info.address))
-// })
+vm.on('step', function (info) {
+  console.log(info.pc, ethUtil.bufferToHex(info.address), info.opcode.name)
+  console.log(info.stack)
+  console.log(info.memory.join(','))
+})
 
 function getHeadNumber(cb){
   iteratorDb.get('head', function(err, result){
