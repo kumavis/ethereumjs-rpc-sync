@@ -12,20 +12,23 @@ function materializeBlock(blockParams, uncles){
     uncleHeaders: [],
   })
   var blockHeader = block.header
-  blockHeader.number = blockParams.number
   blockHeader.parentHash = blockParams.parentHash
-  blockHeader.nonce = blockParams.nonce
   blockHeader.uncleHash = blockParams.sha3Uncles
-  blockHeader.bloom = blockParams.logsBloom
-  blockHeader.transactionsTrie = blockParams.transactionsRoot
-  blockHeader.stateRoot = blockParams.stateRoot
-  blockHeader.receiptTrie = blockParams.receiptRoot || blockParams.receiptsRoot || ethUtil.SHA3_NULL
   blockHeader.coinbase = blockParams.miner
+  blockHeader.stateRoot = blockParams.stateRoot
+  blockHeader.transactionsTrie = blockParams.transactionsRoot
+  blockHeader.receiptTrie = blockParams.receiptRoot || blockParams.receiptsRoot || ethUtil.SHA3_NULL
+  blockHeader.bloom = blockParams.logsBloom
   blockHeader.difficulty = blockParams.difficulty
-  blockHeader.extraData = blockParams.extraData
+  blockHeader.number = blockParams.number
   blockHeader.gasLimit = blockParams.gasLimit
   blockHeader.gasUsed = blockParams.gasUsed
   blockHeader.timestamp = blockParams.timestamp
+  blockHeader.extraData = blockParams.extraData
+  blockHeader.mixHash = blockParams.mixHash
+  blockHeader.nonce = blockParams.nonce
+
+  // override hash incase something was missing
   blockHeader.hash = function () {
     return ethUtil.toBuffer(blockParams.hash)
   }
