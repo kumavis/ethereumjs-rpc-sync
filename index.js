@@ -30,7 +30,6 @@ function syncVm(vm, opts){
   }
 
   function runBlockchain(cb){
-    console.log('running blockchain...')
     async.forever(function(cb){
       // var blockNumber = ethUtil.bufferToInt(block.header.number)
       // console.log(`at block #${blockSyncNumber}, getting next`)
