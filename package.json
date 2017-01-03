@@ -1,6 +1,6 @@
 {
   "name": "ethereumjs-rpc-sync",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -13,6 +13,7 @@
     "eth-store": "^2.1.0",
     "ethereumjs-block": "^1.2.2",
     "ethereumjs-blockchain": "^2.0.0",
+    "ethereumjs-tx": "^1.2.2",
     "ethereumjs-util": "^4.4.0",
     "ethereumjs-vm": "^2.0.2",
     "ethjs-provider-http": "^0.1.4",
