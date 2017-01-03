@@ -5,15 +5,15 @@ const HttpProvider = require('ethjs-provider-http')
 const rpcToBlock = require('./materialize-block.js')
 // const rpcToBlock = require('ethereumjs-block/from-rpc.js')
 
-// const RPC_ENDPOINT = 'https://mainnet.infura.io/'
-const RPC_ENDPOINT = 'http://localhost:8545/'
+const DEFAULT_RPC_ENDPOINT = 'http://localhost:8545/'
 
 module.exports = syncVm
 
 function syncVm(vm, opts){
   opts = opts || {}
 
-  let provider = new HttpProvider(RPC_ENDPOINT)
+  let rpcEndpoint = opts.rpcTarget || DEFAULT_RPC_ENDPOINT
+  let provider = new HttpProvider(rpcEndpoint)
   let startBlockNumber = opts.startBlock || 0
   let lastBlock = null
   let blockNumber = null
