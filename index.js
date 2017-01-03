@@ -1,6 +1,7 @@
-const request = require('request')
 const async = require('async')
 const ethUtil = require('ethereumjs-util')
+const HttpProvider = require('ethjs-provider-http')
+
 const rpcToBlock = require('./materialize-block.js')
 // const rpcToBlock = require('ethereumjs-block/from-rpc.js')
 
@@ -12,8 +13,8 @@ module.exports = syncVm
 function syncVm(vm, opts){
   opts = opts || {}
 
+  let provider = new HttpProvider(RPC_ENDPOINT)
   let startBlockNumber = opts.startBlock || 0
-
   let lastBlock = null
   let blockNumber = null
   let blockHash = null
@@ -81,16 +82,7 @@ function syncVm(vm, opts){
   }
 
   function performRpcRequest(payload, cb){
-    request({
-      uri: RPC_ENDPOINT,
-      method: 'POST',
-      json: payload,
-    }, function(err, res, body){
-      if (err) return cb(err)
-      if (body && body.error) return cb(body.error.message)
-      // console.log(payload,'->',body)
-      cb(null, body)
-    })
+    provider.sendAsync(payload, cb)
   }
 
   function downloadBlock(num, cb){
