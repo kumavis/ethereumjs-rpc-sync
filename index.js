@@ -2,6 +2,7 @@ const request = require('request')
 const async = require('async')
 const ethUtil = require('ethereumjs-util')
 const rpcToBlock = require('./materialize-block.js')
+// const rpcToBlock = require('ethereumjs-block/from-rpc.js')
 
 // const RPC_ENDPOINT = 'https://mainnet.infura.io/'
 const RPC_ENDPOINT = 'http://localhost:8545/'

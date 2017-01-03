@@ -2,14 +2,18 @@ const Block = require('ethereumjs-block')
 const Transaction = require('ethereumjs-tx')
 const ethUtil = require('ethereumjs-util')
 
-module.exports = materializeBlock
+module.exports = blockFromRpc
 
-
-function materializeBlock(blockParams, uncles){
-  // console.log(blockParams)
+/**
+ * Creates a new block object from Ethereum JSON RPC.
+ * @param {Object} blockParams - Ethereum JSON RPC of block (eth_getBlockByNumber)
+ * @param {Array.<Object>} Optional list of Ethereum JSON RPC of uncles (eth_getUncleByBlockHashAndIndex)
+ */
+function blockFromRpc (blockParams, uncles) {
+  uncles = uncles || []
   var block = new Block({
     transactions: [],
-    uncleHeaders: [],
+    uncleHeaders: []
   })
   var blockHeader = block.header
   blockHeader.parentHash = blockParams.parentHash
@@ -33,34 +37,31 @@ function materializeBlock(blockParams, uncles){
     return ethUtil.toBuffer(blockParams.hash)
   }
 
-  block.transactions = (blockParams.transactions || []).map(function(_txParams){
+  block.transactions = (blockParams.transactions || []).map(function (_txParams) {
     var txParams = Object.assign({}, _txParams)
     normalizeTxParams(txParams)
     // override from address
     var fromAddress = ethUtil.toBuffer(txParams.from)
     delete txParams.from
-    // issue is that v is provided as a decimal,
-    // complains about byte length
-    delete txParams.r
-    delete txParams.s
-    delete txParams.v
     var tx = new Transaction(txParams)
-    tx.getSenderAddress = function(){ return fromAddress }
+    tx.getSenderAddress = function () { return fromAddress }
     // override hash
-    tx.hash = function(){ return ethUtil.toBuffer(txParams.hash) }
+    tx.hash = function () { return ethUtil.toBuffer(txParams.hash) }
     return tx
   })
-  block.uncleHeaders = (uncles || []).map(function(uncleParams){
-    return materializeBlock(uncleParams).header
+  block.uncleHeaders = uncles.map(function (uncleParams) {
+    return blockFromRpc(uncleParams).header
   })
 
   return block
 }
 
-function normalizeTxParams(txParams){
+function normalizeTxParams (txParams) {
   // hot fix for https://github.com/ethereumjs/ethereumjs-util/issues/40
-  txParams.gasLimit = (txParams.gasLimit === undefined)? txParams.gas : txParams.gasLimit
-  txParams.data = (txParams.data === undefined)? txParams.input : txParams.data
+  txParams.gasLimit = (txParams.gasLimit === undefined) ? txParams.gas : txParams.gasLimit
+  txParams.data = (txParams.data === undefined) ? txParams.input : txParams.data
   // strict byte length checking
   txParams.to = txParams.to ? ethUtil.setLengthLeft(ethUtil.toBuffer(txParams.to), 20) : null
+  // v as raw signature value {0,1}
+  txParams.v = txParams.v < 27 ? txParams.v + 27 : txParams.v
 }
