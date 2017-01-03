@@ -1,6 +1,7 @@
 const Block = require('ethereumjs-block')
 const Transaction = require('ethereumjs-tx')
 const ethUtil = require('ethereumjs-util')
+const HOMESTEAD_BLOCK_NUMBER = 1150000
 
 module.exports = blockFromRpc
 
@@ -41,6 +42,7 @@ function blockFromRpc (blockParams, uncles) {
     var txParams = Object.assign({}, _txParams)
     normalizeTxParams(txParams)
     var tx = new Transaction(txParams)
+    tx._homestead = (parseInt(txParams.blockNumber) >= HOMESTEAD_BLOCK_NUMBER)
     return tx
   })
   block.uncleHeaders = uncles.map(function (uncleParams) {
