@@ -40,13 +40,7 @@ function blockFromRpc (blockParams, uncles) {
   block.transactions = (blockParams.transactions || []).map(function (_txParams) {
     var txParams = Object.assign({}, _txParams)
     normalizeTxParams(txParams)
-    // override from address
-    var fromAddress = ethUtil.toBuffer(txParams.from)
-    delete txParams.from
     var tx = new Transaction(txParams)
-    tx.getSenderAddress = function () { return fromAddress }
-    // override hash
-    tx.hash = function () { return ethUtil.toBuffer(txParams.hash) }
     return tx
   })
   block.uncleHeaders = uncles.map(function (uncleParams) {
@@ -64,4 +58,5 @@ function normalizeTxParams (txParams) {
   txParams.to = txParams.to ? ethUtil.setLengthLeft(ethUtil.toBuffer(txParams.to), 20) : null
   // v as raw signature value {0,1}
   txParams.v = txParams.v < 27 ? txParams.v + 27 : txParams.v
+  delete txParams.from
 }
