@@ -1,19 +1,16 @@
 const async = require('async')
 const ethUtil = require('ethereumjs-util')
-const HttpProvider = require('ethjs-provider-http')
 
 const rpcToBlock = require('./materialize-block.js')
 // const rpcToBlock = require('ethereumjs-block/from-rpc.js')
 
-const DEFAULT_RPC_ENDPOINT = 'http://localhost:8545/'
 
 module.exports = syncVm
 
 function syncVm(vm, opts){
   opts = opts || {}
 
-  let rpcEndpoint = opts.rpcTarget || DEFAULT_RPC_ENDPOINT
-  let provider = new HttpProvider(rpcEndpoint)
+  let provider = opts.provider
   let startBlockNumber = opts.startBlock || 0
   let lastBlock = null
   let blockNumber = null
